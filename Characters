@@ -36,6 +36,7 @@
             /* Обеспечиваем, чтобы SVG Hanzi Writer корректно масштабировался */
             display: block; 
             overflow: hidden; 
+            min-height: 120px; /* защита от нулевой высоты */
         }
         #writingCanvas {
             border: 2px solid #3b82f6;
@@ -43,6 +44,8 @@
             cursor: crosshair;
             touch-action: none;
             border-radius: 6px;
+            min-height: 120px; /* защита от нулевой высоты */
+            display: block;
         }
         .info-box {
             background-color: #eff6ff;
@@ -197,94 +200,40 @@
     let currentLessonId = 1;
     let currentWordIndex = 0;
     let writer = null;
-
-    // --- 3. Инициализация Холста (Для Рисования Пользователем) ---
+    let currentChar = '';
     const canvas = document.getElementById('writingCanvas');
     const ctx = canvas.getContext('2d');
     const lessonButtons = document.querySelectorAll('.lesson-nav-button');
 
-    // --- 4. Основная Логика Навигации и Загрузки ---
+    // --- 3. Вспомогательные функции ---
 
-    // Загружает текущее слово из текущего урока
-    function loadCurrentWord() {
-        const lesson = hsk1Lessons[currentLessonId];
-        const word = lesson.words[currentWordIndex];
+    // Показывает сообщение пользователю
+    function showMessage(text, type) {
+        const messageBox = document.getElementById('message');
+        // Сначала сбрасываем все классы, кроме базовых
+        messageBox.className = 'mt-4 p-3 text-center rounded-lg font-medium';
         
-        // Обновление информации в блоке
-        document.getElementById('currentLesson').textContent = `${currentLessonId} (${lesson.title})`;
-        document.getElementById('currentIdeogram').textContent = word.char;
-        document.getElementById('pinyin').textContent = word.pinyin;
-        document.getElementById('meaning').textContent = word.meaning;
-
-        // Запуск анимации и очистка холста для практики
-        drawGrid(); 
-        setupAnimation(word.char);
-        showMessage(`Урок ${currentLessonId}: ${lesson.title}. Изучаем: ${word.char} (${word.pinyin})`, 'info');
-
-        // Обновление состояния кнопок (предыдущее/следующее)
-        updateNavigationButtons();
-    }
-
-    // Переключает урок
-    function switchLesson(newLessonId) {
-        // Убедимся, что lessonId является числом
-        newLessonId = parseInt(newLessonId); 
-
-        if (!hsk1Lessons[newLessonId]) return;
-
-        currentLessonId = newLessonId;
-        currentWordIndex = 0;
-        
-        // Обновление стилей кнопок урока
-        lessonButtons.forEach(btn => {
-            const lessonId = parseInt(btn.dataset.lesson);
-            if (lessonId === currentLessonId) {
-                btn.classList.replace('bg-gray-300', 'bg-blue-600');
-                btn.classList.replace('hover:bg-gray-400', 'hover:bg-blue-700');
-                btn.classList.replace('text-gray-800', 'text-white');
-            } else {
-                btn.classList.replace('bg-blue-600', 'bg-gray-300');
-                btn.classList.replace('hover:bg-blue-700', 'hover:bg-gray-400');
-                btn.classList.replace('text-white', 'text-gray-800');
-            }
-        });
-
-        loadCurrentWord();
-    }
-    
-    // Обновляет видимость и состояние кнопок навигации по словам
-    function updateNavigationButtons() {
-        const wordsInLesson = hsk1Lessons[currentLessonId].words.length;
-        const prevBtn = document.getElementById('prevButton');
-        const nextBtn = document.getElementById('nextButton');
-
-        prevBtn.disabled = (currentWordIndex === 0);
-        nextBtn.disabled = (currentWordIndex === wordsInLesson - 1);
-
-        // Стиль для отключенных кнопок
-        if (prevBtn.disabled) {
-            prevBtn.classList.add('opacity-50', 'cursor-not-allowed');
-        } else {
-            prevBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+        switch (type) {
+            case 'success':
+                messageBox.classList.add('bg-green-100', 'text-green-800');
+                messageBox.classList.remove('hidden');
+                break;
+            case 'info':
+                messageBox.classList.add('bg-blue-100', 'text-blue-800');
+                messageBox.classList.remove('hidden');
+                break;
+            default:
+                messageBox.classList.add('hidden');
         }
-        
-        if (nextBtn.disabled) {
-            nextBtn.classList.add('opacity-50', 'cursor-not-allowed');
-        } else {
-            nextBtn.classList.remove('opacity-50', 'cursor-not-allowed');
-        }
+        messageBox.textContent = text;
     }
 
-
-    // --- 5. Функции Рисования и Hanzi Writer ---
-
-    // Рисует сетку "рисовое поле"
+    // --- 4. Логика рисования и сетки ---
     function drawGrid() {
-        // Убедимся, что размер холста установлен перед рисованием
-        const size = canvas.width; 
+        const size = Math.max(1, canvas.width); // защитимся от нулевого размера
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.strokeStyle = '#e5e7eb';
         ctx.lineWidth = 1;
-        ctx.clearRect(0, 0, size, size);
         
         ctx.setLineDash([5, 5]);
         ctx.beginPath();
@@ -299,18 +248,29 @@
         ctx.strokeRect(0, 0, size, size);
     }
 
-    // Настройка и запуск анимации
+    // --- 5. Настройка HanziWriter и анимации ---
     function setupAnimation(char) {
         const targetDiv = document.getElementById('animationTarget');
-        const size = targetDiv.clientWidth;
-        
-        // Удаляем старый SVG, чтобы избежать наложения
-        targetDiv.innerHTML = ''; 
+        // вычисляем размер по реальной ширине контейнера
+        const size = Math.max(100, targetDiv.clientWidth || 120);
+
+        // Сохраняем текущий символ
+        currentChar = char;
+
+        // Очистим старую анимацию
+        targetDiv.innerHTML = '';
+
+        // Если библиотека отсутствует, показываем заглушку
+        if (typeof HanziWriter === 'undefined') {
+            writer = null;
+            targetDiv.innerHTML = `<div class="flex justify-center items-center w-full h-full text-9xl text-gray-800">${char}</div>`;
+            console.warn('HanziWriter library is not loaded.');
+            return;
+        }
 
         try {
-            // Пересоздаем writer только при смене слова
-            writer = HanziWriter.create('animationTarget', char, {
-                // Присваиваем явные размеры
+            // Передаём DOM элемент (более надёжный вариант)
+            writer = HanziWriter.create(targetDiv, char, {
                 width: size,
                 height: size,
                 padding: 5,
@@ -318,58 +278,141 @@
                 strokeColor: '#f87171',
                 delayBetweenStrokes: 100,
                 drawingColor: '#1d4ed8',
-                // Убираем возможность рисования на анимационной области
-                showHintAfterMisses: 0, 
+                showHintAfterMisses: 0,
                 highlightOnComplete: false 
             });
-            
-            // Запускаем анимацию
-            writer.animateCharacter();
+
+            if (writer && typeof writer.animateCharacter === 'function') {
+                writer.animateCharacter();
+            } else {
+                // fallback: если нет animateCharacter, просто показываем символ
+                targetDiv.innerHTML = `<div class="flex justify-center items-center w-full h-full text-9xl text-gray-800">${char}</div>`;
+                writer = null;
+            }
         } catch (error) {
             console.error("Ошибка при создании Hanzi Writer для символа:", char, error);
-            // Если иероглиф не найден (например, отсутствуют данные в библиотеке), показываем его крупно
             targetDiv.innerHTML = `<div class="flex justify-center items-center w-full h-full text-9xl text-gray-800">${char}</div>`;
-            writer = null; 
+            writer = null;
         }
     }
-    
-    // ОПТИМИЗАЦИЯ: Функция адаптивности
+
+    // --- 6. Адаптивное изменение размеров ---
     function resizeElements() {
-        const targetDiv = document.getElementById('animationTarget');
-        const size = targetDiv.clientWidth;
-        
-        // 1. Обновляем размер холста для рисования
-        canvas.width = size;
-        canvas.height = size;
-        drawGrid(); // Перерисовываем сетку, т.к. холст был сброшен
+        const animDiv = document.getElementById('animationTarget');
 
-        // 2. Обновляем размер Hanzi Writer
-        if (writer && typeof writer.updateDimensions === 'function') {
-            writer.updateDimensions({ width: size, height: size });
-            writer.quiz(); // Перезапускаем режим тренировки (если он был активен)
-        } else if (writer === null) {
-            // Если Hanzi Writer не был создан (из-за ошибки в setupAnimation), 
-            // просто перерисовываем заглушку
-            const currentWord = hsk1Lessons[currentLessonId].words[currentWordIndex];
-            if (currentWord) {
-                targetDiv.innerHTML = `<div class="flex justify-center items-center w-full h-full text-9xl text-gray-800">${currentWord.char}</div>`;
-            }
+        // определяем размер для анимации и для canvas
+        const animSize = Math.max(100, animDiv.clientWidth || 120);
+        // canvas.parentElement — колонка с canvas
+        const canvasContainerWidth = Math.max(100, canvas.parentElement ? canvas.parentElement.clientWidth : animSize);
+        const canvasSize = canvasContainerWidth;
+
+        // Устанавливаем реальные пиксельные размеры canvas
+        canvas.width = canvasSize;
+        canvas.height = canvasSize;
+
+        // Перерисовываем сетку
+        drawGrid();
+
+        // Пересоздаём анимацию текущего слова (это надёжнее, чем пытаться обновлять параметры существующего writer)
+        const currentWord = hsk1Lessons[currentLessonId] && hsk1Lessons[currentLessonId].words[currentWordIndex];
+        if (currentWord) {
+            setupAnimation(currentWord.char);
         }
-        
-        // 3. НЕ вызываем loadCurrentWord(), чтобы избежать ненужного пересоздания Hanzi Writer
     }
 
-    window.addEventListener('resize', resizeElements);
-    window.onload = () => {
-        // Сначала устанавливаем размеры, затем загружаем слово
-        resizeElements(); 
-        switchLesson(1); // Начинаем с первого урока и запускаем loadCurrentWord()
-    };
+    window.addEventListener('resize', () => {
+        // Делаем небольшую задержку, чтобы избежать частых пересозданий при быстром ресайзе
+        if (window._resizeTimer) clearTimeout(window._resizeTimer);
+        window._resizeTimer = setTimeout(() => {
+            resizeElements();
+        }, 120);
+    });
 
-    // --- 6. Логика Рисования (Оставлена без изменений, т.к. работает корректно) ---
+    // --- 7. Навигация и загрузка слова ---
+    function updateNavigationButtons() {
+        const wordsInLesson = hsk1Lessons[currentLessonId].words.length;
+        const prevBtn = document.getElementById('prevButton');
+        const nextBtn = document.getElementById('nextButton');
+
+        prevBtn.disabled = (currentWordIndex === 0);
+        nextBtn.disabled = (currentWordIndex === wordsInLesson - 1);
+
+        if (prevBtn.disabled) {
+            prevBtn.classList.add('opacity-50', 'cursor-not-allowed');
+        } else {
+            prevBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+        }
+        
+        if (nextBtn.disabled) {
+            nextBtn.classList.add('opacity-50', 'cursor-not-allowed');
+        } else {
+            nextBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+        }
+    }
+
+    function loadCurrentWord() {
+        const lesson = hsk1Lessons[currentLessonId];
+        const word = lesson.words[currentWordIndex];
+        
+        document.getElementById('currentLesson').textContent = `${currentLessonId} (${lesson.title})`;
+        document.getElementById('currentIdeogram').textContent = word.char;
+        document.getElementById('pinyin').textContent = word.pinyin;
+        document.getElementById('meaning').textContent = word.meaning;
+
+        // Пересоздаём/обновляем холст и анимацию
+        resizeElements();
+        showMessage(`Урок ${currentLessonId}: ${lesson.title}. Изучаем: ${word.char} (${word.pinyin})`, 'info');
+
+        updateNavigationButtons();
+    }
+
+    function switchLesson(newLessonId) {
+        newLessonId = parseInt(newLessonId, 10); 
+        if (!hsk1Lessons[newLessonId]) return;
+
+        currentLessonId = newLessonId;
+        currentWordIndex = 0;
+        
+        // Обновление стилей кнопок урока
+        lessonButtons.forEach(btn => {
+            const lessonId = parseInt(btn.dataset.lesson, 10);
+            if (lessonId === currentLessonId) {
+                btn.classList.remove('bg-gray-300', 'text-gray-800', 'hover:bg-gray-400');
+                btn.classList.add('bg-blue-600', 'text-white', 'hover:bg-blue-700');
+            } else {
+                btn.classList.remove('bg-blue-600', 'text-white', 'hover:bg-blue-700');
+                btn.classList.add('bg-gray-300', 'text-gray-800', 'hover:bg-gray-400');
+            }
+        });
+
+        loadCurrentWord();
+    }
+
+    // --- 8. Рисование пользователем (без изменений логики, только небольшая защита) ---
     let isDrawing = false;
     let lastX = 0;
     let lastY = 0;
+
+    function getCoords(e) {
+        const rect = canvas.getBoundingClientRect();
+        let clientX, clientY;
+
+        if (e.touches && e.touches.length > 0) {
+            clientX = e.touches[0].clientX;
+            clientY = e.touches[0].clientY;
+        } else {
+            clientX = e.clientX;
+            clientY = e.clientY;
+        }
+
+        const scaleX = canvas.width / rect.width || 1;
+        const scaleY = canvas.height / rect.height || 1;
+
+        return [
+            (clientX - rect.left) * scaleX,
+            (clientY - rect.top) * scaleY
+        ];
+    }
 
     function startDrawing(e) {
         e.preventDefault();
@@ -399,28 +442,6 @@
         isDrawing = false;
     }
 
-    function getCoords(e) {
-        const rect = canvas.getBoundingClientRect();
-        let clientX, clientY;
-
-        if (e.touches && e.touches.length > 0) {
-            clientX = e.touches[0].clientX;
-            clientY = e.touches[0].clientY;
-        } else {
-            clientX = e.clientX;
-            clientY = e.clientY;
-        }
-
-        // Масштабируем координаты относительно фактического размера canvas
-        const scaleX = canvas.width / rect.width;
-        const scaleY = canvas.height / rect.height;
-
-        return [
-            (clientX - rect.left) * scaleX,
-            (clientY - rect.top) * scaleY
-        ];
-    }
-
     canvas.addEventListener('mousedown', startDrawing);
     canvas.addEventListener('mousemove', draw);
     canvas.addEventListener('mouseup', stopDrawing);
@@ -429,9 +450,7 @@
     canvas.addEventListener('touchmove', draw);
     canvas.addEventListener('touchend', stopDrawing);
 
-
-    // --- 7. Логика Кнопок ---
-
+    // --- 9. Кнопки и слушатели ---
     document.getElementById('clearButton').addEventListener('click', () => {
         drawGrid();
         showMessage('Холст очищен. Попробуйте снова!', 'info');
@@ -453,44 +472,33 @@
 
     document.getElementById('animateButton').addEventListener('click', () => {
         if (writer && typeof writer.animateCharacter === 'function') {
-            writer.animateCharacter();
-            showMessage('Анимация порядка черт повторяется.', 'info');
-        } else if (!writer) {
+            try {
+                writer.animateCharacter();
+                showMessage('Анимация порядка черт повторяется.', 'info');
+            } catch (err) {
+                console.error('Ошибка при запуске animateCharacter', err);
+                showMessage('Не удалось запустить анимацию.', 'info');
+            }
+        } else {
             showMessage('Для этого слова нет данных об анимации, но вы можете его нарисовать!', 'info');
         }
     });
 
-    // Слушатели для кнопок уроков
     lessonButtons.forEach(btn => {
         btn.addEventListener('click', () => {
-            const lessonId = parseInt(btn.dataset.lesson);
-            // Проверяем, что урок не является текущим, чтобы избежать перезагрузки
+            const lessonId = parseInt(btn.dataset.lesson, 10);
             if (lessonId !== currentLessonId) { 
                 switchLesson(lessonId);
             }
         });
     });
 
-
-    // --- 8. Управление Сообщениями ---
-    function showMessage(text, type) {
-        const messageBox = document.getElementById('message');
-        // Сначала сбрасываем все классы, кроме базовых
-        messageBox.className = 'mt-4 p-3 text-center rounded-lg font-medium';
-        
-        switch (type) {
-            case 'success':
-                messageBox.classList.add('bg-green-100', 'text-green-800');
-                messageBox.classList.remove('hidden');
-                break;
-            case 'info':
-                messageBox.classList.add('bg-blue-100', 'text-blue-800');
-                messageBox.classList.remove('hidden');
-                break;
-            default:
-                messageBox.classList.add('hidden');
-        }
-    }
+    // --- 10. Инициализация ---
+    window.onload = () => {
+        // Устанавливаем начальные размеры и подгружаем первый урок
+        resizeElements();
+        switchLesson(1);
+    };
 </script>
 
 </body>
