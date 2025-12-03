@@ -6,7 +6,7 @@
     <title>Приложение HSK 1: Иероглифы по урокам</title>
     <!-- Подключаем Tailwind CSS для красивого и адаптивного дизайна -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Подключаем Hanzi Writer для анимации порядка черт -->
+    <!-- Подключаем Hanzi Writer для анимации порядка черт и викторины -->
     <script src="https://cdn.jsdelivr.net/npm/hanzi-writer@2.0.2/dist/hanzi-writer.min.js"></script>
     <style>
         /* Устанавливаем шрифт Inter */
@@ -28,24 +28,13 @@
             box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
         }
         /* Стили для контейнеров */
-        #animationTarget {
+        .drawing-target {
             background-color: #fff;
             border: 2px solid #a8a29e;
             border-radius: 6px;
             margin-bottom: 8px;
-            /* Обеспечиваем, чтобы SVG Hanzi Writer корректно масштабировался */
             display: block; 
             overflow: hidden; 
-            min-height: 120px; /* защита от нулевой высоты */
-        }
-        #writingCanvas {
-            border: 2px solid #3b82f6;
-            background-color: #fff;
-            cursor: crosshair;
-            touch-action: none;
-            border-radius: 6px;
-            min-height: 120px; /* защита от нулевой высоты */
-            display: block;
         }
         .info-box {
             background-color: #eff6ff;
@@ -60,13 +49,21 @@
             transform: translateY(-1px);
             box-shadow: 0 4px 10px rgba(59, 130, 246, 0.4);
         }
-        .lesson-nav-button {
-            transition: background-color 0.2s;
-            /* Добавлено: фиксация размера шрифта для адаптивности */
-            white-space: nowrap; 
+        .tab-button {
+            transition: all 0.2s;
+            border-bottom-width: 3px;
         }
-        /* Адаптивный сброс ширины для HanziWriter */
-        #animationTarget > svg {
+        .tab-active {
+            border-color: #3b82f6;
+            color: #3b82f6;
+            font-weight: 600;
+        }
+        .tab-inactive {
+            border-color: transparent;
+            color: #6b7280;
+        }
+        /* Адаптивный сброс ширины для HanziWriter SVG */
+        .drawing-target > svg {
             width: 100%;
             height: 100%;
             display: block;
@@ -91,44 +88,85 @@
         </button>
     </div>
 
+    <!-- Навигация по вкладкам -->
+    <div class="flex border-b border-gray-200 mb-6">
+        <button data-tab="practice" class="tab-button tab-active px-4 py-2 text-md focus:outline-none">
+            1. Практика (Гайд)
+        </button>
+        <button data-tab="quiz" class="tab-button tab-inactive px-4 py-2 text-md focus:outline-none ml-4">
+            2. Тест (Написание по памяти)
+        </button>
+    </div>
+
     <!-- Блок информации о текущем слове -->
     <div class="info-box p-4 mb-6 rounded-lg">
         <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center">
             <p class="text-xl font-semibold mb-2 sm:mb-0">
-                Урок: <span id="currentLesson" class="font-black text-2xl"></span> | Иероглиф: <span id="currentIdeogram" class="text-2xl font-black"></span>
+                Урок: <span id="currentLesson" class="font-black text-2xl"></span>
             </p>
             <div class="text-right">
+                <!-- В режиме теста контейнер с иероглифом скрывается. Убраны все анимации. -->
+                <p class="text-3xl font-black mb-1" id="currentIdeogramContainer">
+                    Иероглиф: <span id="currentIdeogram"></span>
+                </p>
                 <p class="text-xl font-mono" id="pinyin"></p>
                 <p class="text-lg" id="meaning"></p>
             </div>
         </div>
     </div>
 
-    <!-- Основная область практики: Анимация (слева) и Холст (справа) -->
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-        
-        <!-- Колонка 1: Анимация (Гайд) -->
-        <div>
-            <p class="text-md font-medium text-gray-700 mb-2">1. Посмотрите правильный порядок черт:</p>
-            <div id="animationTarget" class="w-full aspect-square"></div>
-            <button id="animateButton" class="action-button bg-gray-600 hover:bg-gray-700 text-white w-full font-bold py-2 px-4 rounded-lg shadow-md mt-2">
-                Повторить Анимацию
-            </button>
-        </div>
+    <!-- Контент вкладок -->
+    <div id="practiceContent" class="tab-content">
+        <!-- Режим Практики: Анимация и Ручное рисование без контура -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            
+            <!-- Колонка 1: Анимация (Гайд) -->
+            <div>
+                <p class="text-md font-medium text-gray-700 mb-2">Посмотрите правильный порядок черт:</p>
+                <div id="animationTarget" class="drawing-target w-full aspect-square border-gray-400"></div>
+                <button id="animateButton" class="action-button bg-gray-600 hover:bg-gray-700 text-white w-full font-bold py-2 px-4 rounded-lg shadow-md mt-2">
+                    Повторить Анимацию
+                </button>
+            </div>
 
-        <!-- Колонка 2: Практика (Ваш Холст) -->
-        <div>
-            <p class="text-md font-medium text-gray-700 mb-2">2. Напишите иероглиф здесь:</p>
-            <canvas id="writingCanvas" class="w-full aspect-square"></canvas>
-            <button id="clearButton" class="action-button bg-red-500 hover:bg-red-600 text-white w-full font-bold py-2 px-4 rounded-lg shadow-md mt-2">
-                Очистить
-            </button>
+            <!-- Колонка 2: Ручная практика (Без контура) -->
+            <div>
+                <p class="text-md font-medium text-gray-700 mb-2">Напишите здесь (по памяти, без подсказки контура):</p>
+                <div id="handwritingTarget" class="drawing-target w-full aspect-square border-blue-500"></div>
+                <button id="clearPracticeButton" class="action-button bg-red-500 hover:bg-red-600 text-white w-full font-bold py-2 px-4 rounded-lg shadow-md mt-2">
+                    Стереть написанное
+                </button>
+            </div>
         </div>
-
     </div>
 
+    <div id="quizContent" class="tab-content hidden">
+        <!-- Режим Теста: Написание по памяти с проверкой (Иероглиф скрыт) -->
+        <div class="flex flex-col items-center">
+            <p class="text-md font-medium text-gray-700 mb-2" id="quizStatusText">Напишите иероглиф здесь (Нажмите "Начать тест"):</p>
+            <!-- Место для HanziWriter Quiz -->
+            <div id="quizTarget" class="drawing-target w-full md:w-1/2 aspect-square border-blue-500"></div>
+            
+            <!-- Кнопки управления тестом -->
+            <div class="flex gap-4 w-full md:w-1/2 mt-4">
+                <button id="startQuizButton" class="action-button bg-blue-500 hover:bg-blue-600 text-white w-2/3 font-bold py-3 px-4 rounded-lg shadow-md text-lg">
+                    Начать тест
+                </button>
+                <button id="clearQuizButton" class="action-button bg-red-500 hover:bg-red-600 text-white w-1/3 font-bold py-3 px-4 rounded-lg shadow-md text-lg" disabled>
+                    Сброс
+                </button>
+            </div>
+            
+            <!-- Кнопка "Показать ответ" -->
+            <button id="showAnswerButton" class="action-button bg-yellow-500 hover:bg-yellow-600 text-white w-full md:w-1/2 font-bold py-2 px-4 rounded-lg shadow-md mt-4 hidden">
+                Показать иероглиф
+            </button>
+        </div>
+    </div>
+
+
     <!-- Кнопки навигации по словам -->
-    <div class="flex justify-between gap-4 mt-6">
+    <div class="flex justify-between gap-4 mt-8">
         <button id="prevButton" class="action-button bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-3 px-6 rounded-full shadow-lg text-lg flex-1">
             ← Предыдущее слово
         </button>
@@ -198,111 +236,270 @@
     // --- 2. Глобальные переменные состояния ---
     let currentLessonId = 1;
     let currentWordIndex = 0;
-    let writer = null;
-    let currentChar = '';
-    const canvas = document.getElementById('writingCanvas');
-    const ctx = canvas.getContext('2d');
+    let currentTab = 'practice';
+
+    let writerAnimation = null; // Для анимации порядка черт (Практика)
+    let writerHandwriting = null; // Для ручного рисования (Практика)
+    let writerQuiz = null; // Для режима викторины (Тест)
+    let isQuizActive = false; 
+
+    // Элементы DOM
     const lessonButtons = document.querySelectorAll('.lesson-nav-button');
+    const tabButtons = document.querySelectorAll('.tab-button');
+    const animationTargetDiv = document.getElementById('animationTarget');
+    const handwritingTargetDiv = document.getElementById('handwritingTarget');
+    const quizTargetDiv = document.getElementById('quizTarget');
+    const ideogramContainer = document.getElementById('currentIdeogramContainer');
+    const currentIdeogramSpan = document.getElementById('currentIdeogram');
 
-    // --- 3. Вспомогательные функции ---
-    function showMessage(text, type) {
-        const messageBox = document.getElementById('message');
-        messageBox.className = 'mt-4 p-3 text-center rounded-lg font-medium';
-        switch (type) {
-            case 'success':
-                messageBox.classList.add('bg-green-100', 'text-green-800');
-                messageBox.classList.remove('hidden');
-                break;
-            case 'info':
-                messageBox.classList.add('bg-blue-100', 'text-blue-800');
-                messageBox.classList.remove('hidden');
-                break;
-            default:
-                messageBox.classList.add('hidden');
-        }
-        messageBox.textContent = text;
-    }
 
-    // --- 4. Логика рисования и сетки ---
-    function drawGrid() {
-        const size = Math.max(1, canvas.width);
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.strokeStyle = '#e5e7eb';
-        ctx.lineWidth = 1;
+    // --- 3. Функции Рисования и Hanzi Writer ---
+
+    function setupPracticeWriters(char) {
+        animationTargetDiv.innerHTML = '';
+        handwritingTargetDiv.innerHTML = '';
         
-        ctx.setLineDash([5, 5]);
-        ctx.beginPath();
-        ctx.moveTo(size / 2, 0); ctx.lineTo(size / 2, size);
-        ctx.moveTo(0, size / 2); ctx.lineTo(size, size / 2);
-        ctx.stroke();
-
-        ctx.setLineDash([]);
-        ctx.strokeStyle = '#d1d5db';
-        ctx.strokeRect(0, 0, size, size);
-    }
-
-    // --- 5. Настройка HanziWriter и анимации ---
-    function setupAnimation(char) {
-        const targetDiv = document.getElementById('animationTarget');
-        const size = Math.max(100, targetDiv.clientWidth || 120);
-        currentChar = char;
-        targetDiv.innerHTML = '';
-        if (typeof HanziWriter === 'undefined') {
-            writer = null;
-            targetDiv.innerHTML = `<div class="flex justify-center items-center w-full h-full text-9xl text-gray-800">${char}</div>`;
-            console.warn('HanziWriter library is not loaded.');
-            return;
-        }
+        const sizeAnimation = animationTargetDiv.clientWidth;
+        const sizeHandwriting = handwritingTargetDiv.clientWidth;
 
         try {
-            writer = HanziWriter.create(targetDiv, char, {
-                width: size,
-                height: size,
+            writerAnimation = HanziWriter.create('animationTarget', char, {
+                width: sizeAnimation,
+                height: sizeAnimation,
                 padding: 5,
                 showOutline: true,
-                strokeColor: '#f87171',
-                delayBetweenStrokes: 100,
-                drawingColor: '#1d4ed8',
+                strokeColor: '#a8a29e', 
+                drawingColor: '#f87171',
                 showHintAfterMisses: 0,
                 highlightOnComplete: false 
             });
+            writerAnimation.animateCharacter();
 
-            if (writer && typeof writer.animateCharacter === 'function') {
-                writer.animateCharacter();
-            } else {
-                targetDiv.innerHTML = `<div class="flex justify-center items-center w-full h-full text-9xl text-gray-800">${char}</div>`;
-                writer = null;
-            }
+            writerHandwriting = HanziWriter.create('handwritingTarget', char, {
+                width: sizeHandwriting,
+                height: sizeHandwriting,
+                padding: 5,
+                showOutline: false, 
+                drawingColor: '#1d4ed8',
+                showHintAfterMisses: 0 
+            });
+            writerHandwriting.quiz({
+                showOutline: false, 
+                showHintAfterMisses: 0,
+                allowMistakes: true, 
+                highlightOnComplete: false 
+            });
+
         } catch (error) {
-            console.error("Ошибка при создании Hanzi Writer для символа:", char, error);
-            targetDiv.innerHTML = `<div class="flex justify-center items-center w-full h-full text-9xl text-gray-800">${char}</div>`;
-            writer = null;
+            console.error("Ошибка при создании Hanzi Writer:", char, error);
+            animationTargetDiv.innerHTML = `<div class="flex justify-center items-center w-full h-full text-9xl text-gray-800">${char}</div>`;
+            handwritingTargetDiv.innerHTML = `<div class="flex justify-center items-center w-full h-full text-9xl text-gray-800">${char}</div>`;
+            writerAnimation = null;
+            writerHandwriting = null;
+        }
+    }
+    
+    function startQuiz() {
+        const word = hsk1Lessons[currentLessonId].words[currentWordIndex];
+        const char = word.char;
+        const size = quizTargetDiv.clientWidth;
+
+        quizTargetDiv.innerHTML = ''; 
+        
+        try {
+            writerQuiz = HanziWriter.create('quizTarget', char, {
+                width: size,
+                height: size,
+                padding: 5,
+                showOutline: false, 
+                showHintAfterMisses: 1, 
+                highlightOnComplete: true,
+                drawingColor: '#1d4ed8', 
+                onComplete: (summary) => {
+                    showMessage(`Поздравляем! Вы правильно написали иероглиф ${summary.character}.`, 'success');
+                    isQuizActive = false;
+                    updateQuizButtons(false);
+                    // Показываем иероглиф
+                    ideogramContainer.classList.remove('invisible');
+                    ideogramContainer.classList.add('quiz-revealed');
+                    document.getElementById('showAnswerButton').classList.add('hidden');
+                    // Важно: обновить текст, так как в скрытом состоянии он мог быть пустым
+                    currentIdeogramSpan.textContent = char;
+                },
+                onError: (error) => {
+                    if (error.reason === 'stroke incorrect') {
+                        showMessage('Неправильная черта. Попробуйте еще раз или нажмите "Показать иероглиф".', 'error');
+                    }
+                }
+            });
+
+            writerQuiz.quiz({
+                showOutline: false, 
+                showHintAfterMisses: 1,
+                hintColor: '#fca5a5' 
+            });
+
+            isQuizActive = true;
+            updateQuizButtons(true);
+            document.getElementById('quizStatusText').textContent = 'Пишите здесь по памяти:';
+            
+            // ГАРАНТИЯ: Убеждаемся, что иероглиф скрыт перед показом сообщения
+            ideogramContainer.classList.add('invisible');
+            currentIdeogramSpan.textContent = '';
+            
+            showMessage(`Тест начат. Используя пиньинь и перевод как подсказку, напишите иероглиф.`, 'info');
+            
+            document.getElementById('showAnswerButton').classList.remove('hidden');
+
+        } catch (error) {
+            console.error("Ошибка при создании Hanzi Writer Quiz:", char, error);
+            quizTargetDiv.innerHTML = `<div class="flex justify-center items-center w-full h-full text-lg text-red-500">Ошибка: Нет данных для этого иероглифа.</div>`;
+            writerQuiz = null;
+            isQuizActive = false;
+            updateQuizButtons(false);
+            document.getElementById('showAnswerButton').classList.add('hidden');
+        }
+    }
+    
+    function updateQuizButtons(isActive) {
+        const startBtn = document.getElementById('startQuizButton');
+        const clearBtn = document.getElementById('clearQuizButton');
+
+        if (isActive) {
+            startBtn.disabled = true;
+            startBtn.classList.add('opacity-50', 'cursor-not-allowed');
+            clearBtn.disabled = false;
+            clearBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            startBtn.textContent = 'Тест активен';
+        } else {
+            startBtn.disabled = false;
+            startBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            clearBtn.disabled = true;
+            clearBtn.classList.add('opacity-50', 'cursor-not-allowed');
+            startBtn.textContent = 'Начать тест';
+            document.getElementById('quizStatusText').textContent = 'Напишите иероглиф здесь (Нажмите "Начать тест"):';
         }
     }
 
-    // --- 6. Адаптивное изменение размеров ---
-    function resizeElements() {
-        const animDiv = document.getElementById('animationTarget');
-        const animSize = Math.max(100, animDiv.clientWidth || 120);
-        const canvasContainerWidth = Math.max(100, canvas.parentElement ? canvas.parentElement.clientWidth : animSize);
-        const canvasSize = canvasContainerWidth;
-        canvas.width = canvasSize;
-        canvas.height = canvasSize;
-        drawGrid();
-        const currentWord = hsk1Lessons[currentLessonId] && hsk1Lessons[currentLessonId].words[currentWordIndex];
-        if (currentWord) {
-            setupAnimation(currentWord.char);
+    // --- 4. Логика Вкладок ---
+
+    function switchTab(tabName) {
+        currentTab = tabName;
+        
+        // Моментальное скрытие иероглифа ДО обновления UI, если переходим в quiz
+        if (tabName === 'quiz' && !ideogramContainer.classList.contains('quiz-revealed')) {
+            ideogramContainer.classList.add('invisible');
+            currentIdeogramSpan.textContent = '';
+        }
+
+        document.getElementById('practiceContent').classList.toggle('hidden', tabName !== 'practice');
+        document.getElementById('quizContent').classList.toggle('hidden', tabName !== 'quiz');
+
+        tabButtons.forEach(btn => {
+            if (btn.dataset.tab === tabName) {
+                btn.classList.replace('tab-inactive', 'tab-active');
+            } else {
+                btn.classList.replace('tab-active', 'tab-inactive');
+            }
+        });
+        
+        if (tabName !== 'quiz') {
+            ideogramContainer.classList.remove('quiz-revealed');
+        }
+        updateInfoDisplay();
+        
+        if (tabName === 'practice') {
+            resetQuiz();
+            const word = hsk1Lessons[currentLessonId].words[currentWordIndex];
+            setupPracticeWriters(word.char);
+        } else if (tabName === 'quiz') {
+            resetQuiz();
+            const size = quizTargetDiv.clientWidth;
+            quizTargetDiv.innerHTML = `<div class="flex justify-center items-center w-full h-full text-2xl text-gray-400">Нажмите "Начать тест"</div>`;
+        }
+    }
+    
+    function updateInfoDisplay() {
+        const word = hsk1Lessons[currentLessonId].words[currentWordIndex];
+        
+        document.getElementById('currentLesson').textContent = `${currentLessonId} (${hsk1Lessons[currentLessonId].title})`;
+        document.getElementById('pinyin').textContent = word.pinyin;
+        document.getElementById('meaning').textContent = word.meaning;
+
+        // ЛОГИКА "INVISIBLE" для мгновенного скрытия без перерисовки
+        const isHiddenInQuiz = (currentTab === 'quiz' && !ideogramContainer.classList.contains('quiz-revealed'));
+
+        if (isHiddenInQuiz) {
+            currentIdeogramSpan.textContent = ''; // Стираем текст
+            ideogramContainer.classList.add('invisible'); // Используем invisible (visibility: hidden) вместо opacity
+            ideogramContainer.classList.remove('opacity-0'); // Убираем старый класс, чтобы не путаться
+        } else {
+            currentIdeogramSpan.textContent = word.char;
+            ideogramContainer.classList.remove('invisible');
+            ideogramContainer.classList.remove('opacity-0');
         }
     }
 
-    window.addEventListener('resize', () => {
-        if (window._resizeTimer) clearTimeout(window._resizeTimer);
-        window._resizeTimer = setTimeout(() => {
-            resizeElements();
-        }, 120);
-    });
 
-    // --- 7. Навигация и загрузка слова ---
+    // --- 5. Основная Логика Навигации и Загрузки ---
+
+    function loadCurrentWord() {
+        // ПРЕДВАРИТЕЛЬНОЕ ДЕЙСТВИЕ: Если мы в режиме теста, скрыть все сразу
+        if (currentTab === 'quiz') {
+            ideogramContainer.classList.add('invisible');
+            currentIdeogramSpan.textContent = '';
+        }
+
+        const lesson = hsk1Lessons[currentLessonId];
+        const word = lesson.words[currentWordIndex];
+        
+        ideogramContainer.classList.remove('quiz-revealed'); 
+        updateInfoDisplay();
+
+        resetQuiz(); 
+        if (currentTab === 'practice') {
+             setupPracticeWriters(word.char);
+        }
+        
+        let messageChar = currentTab === 'practice' ? `${word.char} (${word.pinyin})` : `иероглиф`;
+        showMessage(`Урок ${currentLessonId}: ${lesson.title}. Изучаем: ${messageChar}`, 'info');
+
+        updateNavigationButtons();
+    }
+
+    function resetQuiz() {
+        quizTargetDiv.innerHTML = '';
+        writerQuiz = null;
+        isQuizActive = false;
+        updateQuizButtons(false);
+        ideogramContainer.classList.remove('invisible', 'quiz-revealed'); 
+        document.getElementById('showAnswerButton').classList.add('hidden');
+        updateInfoDisplay();
+    }
+    
+    function switchLesson(newLessonId) {
+        newLessonId = parseInt(newLessonId); 
+        if (!hsk1Lessons[newLessonId]) return;
+
+        currentLessonId = newLessonId;
+        currentWordIndex = 0;
+        
+        lessonButtons.forEach(btn => {
+            const lessonId = parseInt(btn.dataset.lesson);
+            if (lessonId === currentLessonId) {
+                btn.classList.replace('bg-gray-300', 'bg-blue-600');
+                btn.classList.replace('hover:bg-gray-400', 'hover:bg-blue-700');
+                btn.classList.replace('text-gray-800', 'text-white');
+            } else {
+                btn.classList.replace('bg-blue-600', 'bg-gray-300');
+                btn.classList.replace('hover:bg-blue-700', 'hover:bg-gray-400');
+                btn.classList.replace('text-white', 'text-gray-800');
+            }
+        });
+
+        loadCurrentWord();
+    }
+    
     function updateNavigationButtons() {
         const wordsInLesson = hsk1Lessons[currentLessonId].words.length;
         const prevBtn = document.getElementById('prevButton');
@@ -311,122 +508,43 @@
         prevBtn.disabled = (currentWordIndex === 0);
         nextBtn.disabled = (currentWordIndex === wordsInLesson - 1);
 
-        if (prevBtn.disabled) {
-            prevBtn.classList.add('opacity-50', 'cursor-not-allowed');
-        } else {
-            prevBtn.classList.remove('opacity-50', 'cursor-not-allowed');
-        }
-        
-        if (nextBtn.disabled) {
-            nextBtn.classList.add('opacity-50', 'cursor-not-allowed');
-        } else {
-            nextBtn.classList.remove('opacity-50', 'cursor-not-allowed');
-        }
-    }
-
-    function loadCurrentWord() {
-        const lesson = hsk1Lessons[currentLessonId];
-        const word = lesson.words[currentWordIndex];
-        
-        document.getElementById('currentLesson').textContent = `${currentLessonId} (${lesson.title})`;
-        document.getElementById('currentIdeogram').textContent = word.char;
-        document.getElementById('pinyin').textContent = word.pinyin;
-        document.getElementById('meaning').textContent = word.meaning;
-
-        resizeElements();
-        showMessage(`Урок ${currentLessonId}: ${lesson.title}. Изучаем: ${word.char} (${word.pinyin})`, 'info');
-
-        updateNavigationButtons();
-    }
-
-    function switchLesson(newLessonId) {
-        newLessonId = parseInt(newLessonId, 10); 
-        if (!hsk1Lessons[newLessonId]) return;
-
-        currentLessonId = newLessonId;
-        currentWordIndex = 0;
-        
-        lessonButtons.forEach(btn => {
-            const lessonId = parseInt(btn.dataset.lesson, 10);
-            if (lessonId === currentLessonId) {
-                btn.classList.remove('bg-gray-300', 'text-gray-800', 'hover:bg-gray-400');
-                btn.classList.add('bg-blue-600', 'text-white', 'hover:bg-blue-700');
+        [prevBtn, nextBtn].forEach(btn => {
+            if (btn.disabled) {
+                btn.classList.add('opacity-50', 'cursor-not-allowed');
             } else {
-                btn.classList.remove('bg-blue-600', 'text-white', 'hover:bg-blue-700');
-                btn.classList.add('bg-gray-300', 'text-gray-800', 'hover:bg-gray-400');
+                btn.classList.remove('opacity-50', 'cursor-not-allowed');
             }
         });
-
-        loadCurrentWord();
     }
 
-    // --- 8. Рисование пользователем ---
-    let isDrawing = false;
-    let lastX = 0;
-    let lastY = 0;
 
-    function getCoords(e) {
-        const rect = canvas.getBoundingClientRect();
-        let clientX, clientY;
-
-        if (e.touches && e.touches.length > 0) {
-            clientX = e.touches[0].clientX;
-            clientY = e.touches[0].clientY;
-        } else {
-            clientX = e.clientX;
-            clientY = e.clientY;
-        }
-
-        const scaleX = canvas.width / rect.width || 1;
-        const scaleY = canvas.height / rect.height || 1;
-
-        return [
-            (clientX - rect.left) * scaleX,
-            (clientY - rect.top) * scaleY
-        ];
-    }
-
-    function startDrawing(e) {
-        e.preventDefault();
-        isDrawing = true;
-        [lastX, lastY] = getCoords(e);
-    }
-
-    function draw(e) {
-        if (!isDrawing) return;
-        e.preventDefault();
-
-        const [x, y] = getCoords(e);
+    // --- 6. Логика Адаптивности ---
+    function resizeElements() {
+        const sizeAnimation = animationTargetDiv.clientWidth;
+        const sizeHandwriting = handwritingTargetDiv.clientWidth;
+        const sizeQuiz = quizTargetDiv.clientWidth;
         
-        ctx.beginPath();
-        ctx.moveTo(lastX, lastY);
-        ctx.lineTo(x, y);
-        ctx.strokeStyle = '#1d4ed8';
-        ctx.lineWidth = 8;
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-        ctx.stroke();
-
-        [lastX, lastY] = [x, y];
+        if (writerAnimation && typeof writerAnimation.updateDimensions === 'function') {
+            writerAnimation.updateDimensions({ width: sizeAnimation, height: sizeAnimation });
+        }
+        
+        if (writerHandwriting && typeof writerHandwriting.updateDimensions === 'function') {
+            writerHandwriting.updateDimensions({ width: sizeHandwriting, height: sizeHandwriting });
+        }
+        
+        if (writerQuiz && typeof writerQuiz.updateDimensions === 'function') {
+            writerQuiz.updateDimensions({ width: sizeQuiz, height: sizeQuiz });
+            if (isQuizActive) {
+                writerQuiz.quiz({ showOutline: false, showHintAfterMisses: 1, hintColor: '#fca5a5' });
+            }
+        } else if (currentTab === 'quiz' && !isQuizActive) {
+            quizTargetDiv.innerHTML = `<div class="flex justify-center items-center w-full h-full text-2xl text-gray-400">Нажмите "Начать тест"</div>`;
+        }
+        
     }
 
-    function stopDrawing() {
-        isDrawing = false;
-    }
 
-    canvas.addEventListener('mousedown', startDrawing);
-    canvas.addEventListener('mousemove', draw);
-    canvas.addEventListener('mouseup', stopDrawing);
-    canvas.addEventListener('mouseout', stopDrawing);
-    canvas.addEventListener('touchstart', startDrawing);
-    canvas.addEventListener('touchmove', draw);
-    canvas.addEventListener('touchend', stopDrawing);
-
-    // --- 9. Кнопки и слушатели ---
-    document.getElementById('clearButton').addEventListener('click', () => {
-        drawGrid();
-        showMessage('Холст очищен. Попробуйте снова!', 'info');
-    });
+    // --- 7. Логика Кнопок и Событий ---
 
     document.getElementById('prevButton').addEventListener('click', () => {
         if (currentWordIndex > 0) {
@@ -443,32 +561,109 @@
     });
 
     document.getElementById('animateButton').addEventListener('click', () => {
-        if (writer && typeof writer.animateCharacter === 'function') {
-            try {
-                writer.animateCharacter();
-                showMessage('Анимация порядка черт повторяется.', 'info');
-            } catch (err) {
-                console.error('Ошибка при запуске animateCharacter', err);
-                showMessage('Не удалось запустить анимацию.', 'info');
-            }
+        if (writerAnimation && typeof writerAnimation.animateCharacter === 'function') {
+            writerAnimation.animateCharacter();
+            showMessage('Анимация порядка черт повторяется.', 'info');
         } else {
-            showMessage('Для этого слова нет данных об анимации, но вы можете его нарисовать!', 'info');
+            showMessage('Для этого слова нет данных об анимации.', 'info');
         }
+    });
+    
+    document.getElementById('clearPracticeButton').addEventListener('click', () => {
+        if (writerHandwriting && typeof writerHandwriting.quiz === 'function') {
+            writerHandwriting.quiz({
+                showOutline: false, 
+                showHintAfterMisses: 0,
+                allowMistakes: true,
+                highlightOnComplete: false 
+            });
+            showMessage('Написанное стерто.', 'info');
+        }
+    });
+
+    document.getElementById('startQuizButton').addEventListener('click', () => {
+        if (!isQuizActive) {
+            startQuiz();
+            // Гарантированное скрытие при старте
+            ideogramContainer.classList.add('invisible');
+            currentIdeogramSpan.textContent = '';
+        }
+    });
+
+    document.getElementById('clearQuizButton').addEventListener('click', () => {
+        if (writerQuiz && isQuizActive) {
+            writerQuiz.quiz({
+                showOutline: false, 
+                showHintAfterMisses: 1,
+                hintColor: '#fca5a5'
+            });
+            showMessage('Текущая попытка сброшена. Начинайте писать заново!', 'info');
+        }
+    });
+    
+    document.getElementById('showAnswerButton').addEventListener('click', () => {
+        ideogramContainer.classList.remove('invisible');
+        ideogramContainer.classList.add('quiz-revealed'); 
+        
+        // Восстанавливаем текст иероглифа, так как он был стерт
+        const word = hsk1Lessons[currentLessonId].words[currentWordIndex];
+        currentIdeogramSpan.textContent = word.char;
+
+        if (writerQuiz && typeof writerQuiz.animateCharacter === 'function') {
+            writerQuiz.animateCharacter();
+        }
+        
+        showMessage('Вы показали иероглиф. Для начала новой попытки нажмите "Начать тест".', 'info');
+        isQuizActive = false;
+        updateQuizButtons(false);
+        document.getElementById('showAnswerButton').classList.add('hidden');
     });
 
     lessonButtons.forEach(btn => {
         btn.addEventListener('click', () => {
-            const lessonId = parseInt(btn.dataset.lesson, 10);
+            const lessonId = parseInt(btn.dataset.lesson);
             if (lessonId !== currentLessonId) { 
                 switchLesson(lessonId);
             }
         });
     });
 
-    // --- 10. Инициализация ---
+    tabButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+            switchTab(btn.dataset.tab);
+        });
+    });
+
+
+    // --- 8. Управление Сообщениями ---
+    function showMessage(text, type) {
+        const messageBox = document.getElementById('message');
+        messageBox.className = 'mt-4 p-3 text-center rounded-lg font-medium';
+        
+        switch (type) {
+            case 'success':
+                messageBox.classList.add('bg-green-100', 'text-green-800');
+                break;
+            case 'info':
+                messageBox.classList.add('bg-blue-100', 'text-blue-800');
+                break;
+            case 'error':
+                messageBox.classList.add('bg-red-100', 'text-red-800');
+                break;
+            default:
+                messageBox.classList.add('hidden');
+                return; 
+        }
+        messageBox.textContent = text;
+        messageBox.classList.remove('hidden');
+    }
+    
+    // --- 9. Инициализация ---
+    window.addEventListener('resize', resizeElements);
     window.onload = () => {
+        switchLesson(1); 
         resizeElements();
-        switchLesson(1);
+        switchTab('practice');
     };
 </script>
 
