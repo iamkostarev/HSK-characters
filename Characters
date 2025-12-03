@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Приложение HSK 1: Иероглифы по урокам</title>
+    <!-- Подключаем Tailwind CSS для красивого и адаптивного дизайна -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Подключаем Hanzi Writer для анимации порядка черт -->
+    <script src="https://cdn.jsdelivr.net/npm/hanzi-writer@2.0.2/dist/hanzi-writer.min.js"></script>
+    <style>
+        /* Устанавливаем шрифт Inter */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f7f7f7;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 800px;
+            width: 100%;
+            background: white;
+            padding: 24px;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+        }
+        /* Стили для контейнеров */
+        #animationTarget {
+            background-color: #fff;
+            border: 2px solid #a8a29e;
+            border-radius: 6px;
+            margin-bottom: 8px;
+            /* Обеспечиваем, чтобы SVG Hanzi Writer корректно масштабировался */
+            display: block; 
+            overflow: hidden; 
+        }
+        #writingCanvas {
+            border: 2px solid #3b82f6;
+            background-color: #fff;
+            cursor: crosshair;
+            touch-action: none;
+            border-radius: 6px;
+        }
+        .info-box {
+            background-color: #eff6ff;
+            color: #1e40af;
+            border-left: 4px solid #3b82f6;
+        }
+        /* Стили кнопок */
+        .action-button {
+            transition: all 0.15s ease-in-out;
+        }
+        .action-button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 10px rgba(59, 130, 246, 0.4);
+        }
+        .lesson-nav-button {
+            transition: background-color 0.2s;
+            /* Добавлено: фиксация размера шрифта для адаптивности */
+            white-space: nowrap; 
+        }
+        /* Адаптивный сброс ширины для HanziWriter */
+        #animationTarget > svg {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1 class="text-3xl font-bold text-gray-800 mb-4 text-center">Практика Иероглифов HSK 1</h1>
+
+    <!-- Навигация по урокам -->
+    <div class="flex flex-wrap gap-2 justify-center mb-6">
+        <button data-lesson="1" class="lesson-nav-button bg-gray-300 hover:bg-gray-400 text-gray-800 font-semibold py-2 px-4 rounded-full text-sm shadow-md">
+            Урок 1 (你好)
+        </button>
+        <button data-lesson="2" class="lesson-nav-button bg-gray-300 hover:bg-gray-400 text-gray-800 font-semibold py-2 px-4 rounded-full text-sm shadow-md">
+            Урок 2 (谢谢)
+        </button>
+        <button data-lesson="3" class="lesson-nav-button bg-gray-300 hover:bg-gray-400 text-gray-800 font-semibold py-2 px-4 rounded-full text-sm shadow-md">
+            Урок 3 (名字)
+        </button>
+    </div>
+
+    <!-- Блок информации о текущем слове -->
+    <div class="info-box p-4 mb-6 rounded-lg">
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center">
+            <p class="text-xl font-semibold mb-2 sm:mb-0">
+                Урок: <span id="currentLesson" class="font-black text-2xl"></span> | Иероглиф: <span id="currentIdeogram" class="text-2xl font-black"></span>
+            </p>
+            <div class="text-right">
+                <p class="text-xl font-mono" id="pinyin"></p>
+                <p class="text-lg" id="meaning"></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Основная область практики: Анимация (слева) и Холст (справа) -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        
+        <!-- Колонка 1: Анимация (Гайд) -->
+        <div>
+            <p class="text-md font-medium text-gray-700 mb-2">1. Посмотрите правильный порядок черт:</p>
+            <div id="animationTarget" class="w-full aspect-square"></div>
+            <button id="animateButton" class="action-button bg-gray-600 hover:bg-gray-700 text-white w-full font-bold py-2 px-4 rounded-lg shadow-md mt-2">
+                Повторить Анимацию
+            </button>
+        </div>
+
+        <!-- Колонка 2: Практика (Ваш Холст) -->
+        <div>
+            <p class="text-md font-medium text-gray-700 mb-2">2. Напишите иероглиф здесь:</p>
+            <!-- Атрибуты width/height убраны, чтобы полностью полагаться на CSS w-full aspect-square -->
+            <canvas id="writingCanvas" class="w-full aspect-square"></canvas>
+            <button id="clearButton" class="action-button bg-red-500 hover:bg-red-600 text-white w-full font-bold py-2 px-4 rounded-lg shadow-md mt-2">
+                Очистить
+            </button>
+        </div>
+
+    </div>
+
+    <!-- Кнопки навигации по словам -->
+    <div class="flex justify-between gap-4 mt-6">
+        <button id="prevButton" class="action-button bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-3 px-6 rounded-full shadow-lg text-lg flex-1">
+            ← Предыдущее слово
+        </button>
+        <button id="nextButton" class="action-button bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-6 rounded-full shadow-lg text-lg flex-1">
+            Следующее слово →
+        </button>
+    </div>
+
+    <!-- Поле для сообщений -->
+    <div id="message" class="mt-4 p-3 text-center rounded-lg font-medium hidden"></div>
+
+</div>
+
+<script>
+    // --- 1. Структура данных HSK 1 по урокам ---
+    const hsk1Lessons = {
+        1: {
+            title: "Приветствия",
+            words: [
+                { char: "你", pinyin: "nǐ", meaning: "ты" },
+                { char: "您", pinyin: "nín", meaning: "Вы (вежл.)" },
+                { char: "好", pinyin: "hǎo", meaning: "хороший" },
+                { char: "对", pinyin: "duì", meaning: "правильный (часть '对不起')" },
+                { char: "不", pinyin: "bù", meaning: "нет; не (часть '对不起')" },
+                { char: "起", pinyin: "qǐ", meaning: "вставать (часть '对不起')" },
+                { char: "没", pinyin: "méi", meaning: "нет; не (часть '没关系')" },
+                { char: "关", pinyin: "guān", meaning: "закрывать (часть '没关系')" },
+                { char: "系", pinyin: "xì", meaning: "связь (часть '没关系')" },
+            ]
+        },
+        2: {
+            title: "Благодарность и прощание",
+            words: [
+                { char: "谢", pinyin: "xiè", meaning: "благодарить (часть '谢谢')" }, 
+                { char: "客", pinyin: "kè", meaning: "гость (часть '不客气')" },
+                { char: "气", pinyin: "qì", meaning: "воздух; вежливость (часть '不客气')" },
+                { char: "再", pinyin: "zài", meaning: "снова" },
+                { char: "见", pinyin: "jiàn", meaning: "видеть" },
+            ]
+        },
+        3: {
+            title: "Имена, личности, страны",
+            words: [
+                { char: "叫", pinyin: "jiào", meaning: "звать; называться" },
+                { char: "什", pinyin: "shén", meaning: "что? (часть '什么')" },
+                { char: "么", pinyin: "me", meaning: "частица (часть '什么')" },
+                { char: "名", pinyin: "míng", meaning: "имя" },
+                { char: "字", pinyin: "zì", meaning: "иероглиф" },
+                { char: "我", pinyin: "wǒ", meaning: "я" },
+                { char: "他", pinyin: "tā", meaning: "он" },
+                { char: "她", pinyin: "tā", meaning: "она" },
+                { char: "们", pinyin: "men", meaning: "суффикс мн. ч." },
+                { char: "是", pinyin: "shì", meaning: "быть; являться" },
+                { char: "老", pinyin: "lǎo", meaning: "старый; опытный (часть '老师')" },
+                { char: "师", pinyin: "shī", meaning: "учитель; мастер (часть '老师')" },
+                { char: "吗", pinyin: "ma", meaning: "вопросительная частица" },
+                { char: "学", pinyin: "xué", meaning: "учиться (часть '学生')" },
+                { char: "生", pinyin: "shēng", meaning: "рождаться; ученик (часть '学生')" },
+                { char: "人", pinyin: "rén", meaning: "человек" },
+                { char: "中", pinyin: "zhōng", meaning: "середина (часть '中国')" },
+                { char: "国", pinyin: "guó", meaning: "страна (часть '中国')" },
+                { char: "美", pinyin: "měi", meaning: "красивый (часть '美国')" },
+            ]
+        }
+    };
+    
+    // --- 2. Глобальные переменные состояния ---
+    let currentLessonId = 1;
+    let currentWordIndex = 0;
+    let writer = null;
+
+    // --- 3. Инициализация Холста (Для Рисования Пользователем) ---
+    const canvas = document.getElementById('writingCanvas');
+    const ctx = canvas.getContext('2d');
+    const lessonButtons = document.querySelectorAll('.lesson-nav-button');
+
+    // --- 4. Основная Логика Навигации и Загрузки ---
+
+    // Загружает текущее слово из текущего урока
+    function loadCurrentWord() {
+        const lesson = hsk1Lessons[currentLessonId];
+        const word = lesson.words[currentWordIndex];
+        
+        // Обновление информации в блоке
+        document.getElementById('currentLesson').textContent = `${currentLessonId} (${lesson.title})`;
+        document.getElementById('currentIdeogram').textContent = word.char;
+        document.getElementById('pinyin').textContent = word.pinyin;
+        document.getElementById('meaning').textContent = word.meaning;
+
+        // Запуск анимации и очистка холста для практики
+        drawGrid(); 
+        setupAnimation(word.char);
+        showMessage(`Урок ${currentLessonId}: ${lesson.title}. Изучаем: ${word.char} (${word.pinyin})`, 'info');
+
+        // Обновление состояния кнопок (предыдущее/следующее)
+        updateNavigationButtons();
+    }
+
+    // Переключает урок
+    function switchLesson(newLessonId) {
+        // Убедимся, что lessonId является числом
+        newLessonId = parseInt(newLessonId); 
+
+        if (!hsk1Lessons[newLessonId]) return;
+
+        currentLessonId = newLessonId;
+        currentWordIndex = 0;
+        
+        // Обновление стилей кнопок урока
+        lessonButtons.forEach(btn => {
+            const lessonId = parseInt(btn.dataset.lesson);
+            if (lessonId === currentLessonId) {
+                btn.classList.replace('bg-gray-300', 'bg-blue-600');
+                btn.classList.replace('hover:bg-gray-400', 'hover:bg-blue-700');
+                btn.classList.replace('text-gray-800', 'text-white');
+            } else {
+                btn.classList.replace('bg-blue-600', 'bg-gray-300');
+                btn.classList.replace('hover:bg-blue-700', 'hover:bg-gray-400');
+                btn.classList.replace('text-white', 'text-gray-800');
+            }
+        });
+
+        loadCurrentWord();
+    }
+    
+    // Обновляет видимость и состояние кнопок навигации по словам
+    function updateNavigationButtons() {
+        const wordsInLesson = hsk1Lessons[currentLessonId].words.length;
+        const prevBtn = document.getElementById('prevButton');
+        const nextBtn = document.getElementById('nextButton');
+
+        prevBtn.disabled = (currentWordIndex === 0);
+        nextBtn.disabled = (currentWordIndex === wordsInLesson - 1);
+
+        // Стиль для отключенных кнопок
+        if (prevBtn.disabled) {
+            prevBtn.classList.add('opacity-50', 'cursor-not-allowed');
+        } else {
+            prevBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+        }
+        
+        if (nextBtn.disabled) {
+            nextBtn.classList.add('opacity-50', 'cursor-not-allowed');
+        } else {
+            nextBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+        }
+    }
+
+
+    // --- 5. Функции Рисования и Hanzi Writer ---
+
+    // Рисует сетку "рисовое поле"
+    function drawGrid() {
+        // Убедимся, что размер холста установлен перед рисованием
+        const size = canvas.width; 
+        ctx.strokeStyle = '#e5e7eb';
+        ctx.lineWidth = 1;
+        ctx.clearRect(0, 0, size, size);
+        
+        ctx.setLineDash([5, 5]);
+        ctx.beginPath();
+        // Вертикальная линия
+        ctx.moveTo(size / 2, 0); ctx.lineTo(size / 2, size);
+        // Горизонтальная линия
+        ctx.moveTo(0, size / 2); ctx.lineTo(size, size / 2);
+        ctx.stroke();
+
+        ctx.setLineDash([]);
+        ctx.strokeStyle = '#d1d5db';
+        ctx.strokeRect(0, 0, size, size);
+    }
+
+    // Настройка и запуск анимации
+    function setupAnimation(char) {
+        const targetDiv = document.getElementById('animationTarget');
+        const size = targetDiv.clientWidth;
+        
+        // Удаляем старый SVG, чтобы избежать наложения
+        targetDiv.innerHTML = ''; 
+
+        try {
+            // Пересоздаем writer только при смене слова
+            writer = HanziWriter.create('animationTarget', char, {
+                // Присваиваем явные размеры
+                width: size,
+                height: size,
+                padding: 5,
+                showOutline: true,
+                strokeColor: '#f87171',
+                delayBetweenStrokes: 100,
+                drawingColor: '#1d4ed8',
+                // Убираем возможность рисования на анимационной области
+                showHintAfterMisses: 0, 
+                highlightOnComplete: false 
+            });
+            
+            // Запускаем анимацию
+            writer.animateCharacter();
+        } catch (error) {
+            console.error("Ошибка при создании Hanzi Writer для символа:", char, error);
+            // Если иероглиф не найден (например, отсутствуют данные в библиотеке), показываем его крупно
+            targetDiv.innerHTML = `<div class="flex justify-center items-center w-full h-full text-9xl text-gray-800">${char}</div>`;
+            writer = null; 
+        }
+    }
+    
+    // ОПТИМИЗАЦИЯ: Функция адаптивности
+    function resizeElements() {
+        const targetDiv = document.getElementById('animationTarget');
+        const size = targetDiv.clientWidth;
+        
+        // 1. Обновляем размер холста для рисования
+        canvas.width = size;
+        canvas.height = size;
+        drawGrid(); // Перерисовываем сетку, т.к. холст был сброшен
+
+        // 2. Обновляем размер Hanzi Writer
+        if (writer && typeof writer.updateDimensions === 'function') {
+            writer.updateDimensions({ width: size, height: size });
+            writer.quiz(); // Перезапускаем режим тренировки (если он был активен)
+        } else if (writer === null) {
+            // Если Hanzi Writer не был создан (из-за ошибки в setupAnimation), 
+            // просто перерисовываем заглушку
+            const currentWord = hsk1Lessons[currentLessonId].words[currentWordIndex];
+            if (currentWord) {
+                targetDiv.innerHTML = `<div class="flex justify-center items-center w-full h-full text-9xl text-gray-800">${currentWord.char}</div>`;
+            }
+        }
+        
+        // 3. НЕ вызываем loadCurrentWord(), чтобы избежать ненужного пересоздания Hanzi Writer
+    }
+
+    window.addEventListener('resize', resizeElements);
+    window.onload = () => {
+        // Сначала устанавливаем размеры, затем загружаем слово
+        resizeElements(); 
+        switchLesson(1); // Начинаем с первого урока и запускаем loadCurrentWord()
+    };
+
+    // --- 6. Логика Рисования (Оставлена без изменений, т.к. работает корректно) ---
+    let isDrawing = false;
+    let lastX = 0;
+    let lastY = 0;
+
+    function startDrawing(e) {
+        e.preventDefault();
+        isDrawing = true;
+        [lastX, lastY] = getCoords(e);
+    }
+
+    function draw(e) {
+        if (!isDrawing) return;
+        e.preventDefault();
+
+        const [x, y] = getCoords(e);
+        
+        ctx.beginPath();
+        ctx.moveTo(lastX, lastY);
+        ctx.lineTo(x, y);
+        ctx.strokeStyle = '#1d4ed8';
+        ctx.lineWidth = 8;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.stroke();
+
+        [lastX, lastY] = [x, y];
+    }
+
+    function stopDrawing() {
+        isDrawing = false;
+    }
+
+    function getCoords(e) {
+        const rect = canvas.getBoundingClientRect();
+        let clientX, clientY;
+
+        if (e.touches && e.touches.length > 0) {
+            clientX = e.touches[0].clientX;
+            clientY = e.touches[0].clientY;
+        } else {
+            clientX = e.clientX;
+            clientY = e.clientY;
+        }
+
+        // Масштабируем координаты относительно фактического размера canvas
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+
+        return [
+            (clientX - rect.left) * scaleX,
+            (clientY - rect.top) * scaleY
+        ];
+    }
+
+    canvas.addEventListener('mousedown', startDrawing);
+    canvas.addEventListener('mousemove', draw);
+    canvas.addEventListener('mouseup', stopDrawing);
+    canvas.addEventListener('mouseout', stopDrawing);
+    canvas.addEventListener('touchstart', startDrawing);
+    canvas.addEventListener('touchmove', draw);
+    canvas.addEventListener('touchend', stopDrawing);
+
+
+    // --- 7. Логика Кнопок ---
+
+    document.getElementById('clearButton').addEventListener('click', () => {
+        drawGrid();
+        showMessage('Холст очищен. Попробуйте снова!', 'info');
+    });
+
+    document.getElementById('prevButton').addEventListener('click', () => {
+        if (currentWordIndex > 0) {
+            currentWordIndex--;
+            loadCurrentWord();
+        }
+    });
+
+    document.getElementById('nextButton').addEventListener('click', () => {
+        if (currentWordIndex < hsk1Lessons[currentLessonId].words.length - 1) {
+            currentWordIndex++;
+            loadCurrentWord();
+        }
+    });
+
+    document.getElementById('animateButton').addEventListener('click', () => {
+        if (writer && typeof writer.animateCharacter === 'function') {
+            writer.animateCharacter();
+            showMessage('Анимация порядка черт повторяется.', 'info');
+        } else if (!writer) {
+            showMessage('Для этого слова нет данных об анимации, но вы можете его нарисовать!', 'info');
+        }
+    });
+
+    // Слушатели для кнопок уроков
+    lessonButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const lessonId = parseInt(btn.dataset.lesson);
+            // Проверяем, что урок не является текущим, чтобы избежать перезагрузки
+            if (lessonId !== currentLessonId) { 
+                switchLesson(lessonId);
+            }
+        });
+    });
+
+
+    // --- 8. Управление Сообщениями ---
+    function showMessage(text, type) {
+        const messageBox = document.getElementById('message');
+        // Сначала сбрасываем все классы, кроме базовых
+        messageBox.className = 'mt-4 p-3 text-center rounded-lg font-medium';
+        
+        switch (type) {
+            case 'success':
+                messageBox.classList.add('bg-green-100', 'text-green-800');
+                messageBox.classList.remove('hidden');
+                break;
+            case 'info':
+                messageBox.classList.add('bg-blue-100', 'text-blue-800');
+                messageBox.classList.remove('hidden');
+                break;
+            default:
+                messageBox.classList.add('hidden');
+        }
+    }
+</script>
+
+</body>
+</html>
